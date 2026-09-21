@@ -1,0 +1,28 @@
+; Engine configuration file.
+; Projet-Aurora — prototype J-RPG HD-2D (Godot 4).
+
+config_version=5
+
+[application]
+
+config/name="Projet-Aurora"
+config/description="Prototype J-RPG HD-2D (Godot 4). Vertical slice : exploration 3D + Sprite3D, totem/sparkle, combat tour par tour minimal."
+run/main_scene="res://scenes/Exploration.tscn"
+config/features=PackedStringArray("4.7", "GL Compatibility")
+config/icon="res://icon.svg"
+
+[autoload]
+
+GameState="*res://scripts/game_state.gd"
+
+[display]
+
+window/size/viewport_width=1280
+window/size/viewport_height=720
+window/stretch/mode="canvas_items"
+
+[rendering]
+
+renderer/rendering_method="gl_compatibility"
+renderer/rendering_method.mobile="gl_compatibility"
+textures/canvas_textures/default_texture_filter=0
