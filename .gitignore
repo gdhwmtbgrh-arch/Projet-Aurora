@@ -1,0 +1,6 @@
+# Godot 4 (cache d'import et exports)
+.godot/
+/android/
+/build/
+export_presets.cfg
+*.import
