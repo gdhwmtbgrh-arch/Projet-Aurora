@@ -1,0 +1,396 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Aurora Budget</title>
+<meta name="theme-color" content="#0f766e">
+<style>
+:root{
+  --bg:#f4f6f8; --card:#fff; --ink:#14202b; --muted:#66778a; --line:#e3e8ee;
+  --accent:#0f766e; --accent-ink:#fff; --good:#15803d; --warn:#b45309; --bad:#b91c1c;
+  --c-fixed:#6366f1; --c-save:#0ea5e9; --c-card:#f59e0b; --c-var:#ec4899; --c-left:#22c55e;
+  --shadow:0 1px 2px rgba(16,24,40,.06),0 4px 14px rgba(16,24,40,.05);
+}
+@media (prefers-color-scheme:dark){:root{
+  --bg:#0c1319; --card:#151e27; --ink:#e8eef4; --muted:#8a9bad; --line:#25313d;
+  --accent:#2dd4bf; --accent-ink:#052925; --good:#4ade80; --warn:#fbbf24; --bad:#f87171;
+  --shadow:none;
+}}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--bg);color:var(--ink);font:16px/1.4 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;padding-bottom:84px}
+main{max-width:640px;margin:0 auto;padding:16px}
+h1{font-size:1.25rem;margin:0}
+h2{font-size:.8rem;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin:0 0 10px;font-weight:600}
+header.top{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:14px}
+header.top small{color:var(--muted)}
+.card{background:var(--card);border-radius:16px;padding:16px;margin-bottom:14px;box-shadow:var(--shadow);border:1px solid var(--line)}
+.hero{text-align:center;padding:22px 16px}
+.hero .big{font-size:2.6rem;font-weight:700;letter-spacing:-.02em;line-height:1.1}
+.hero .sub{color:var(--muted);margin-top:6px}
+.good{color:var(--good)} .warn{color:var(--warn)} .bad{color:var(--bad)} .muted{color:var(--muted)}
+.grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:16px}
+.grid3 div{background:var(--bg);border-radius:12px;padding:10px 6px}
+.grid3 b{display:block;font-size:1rem}
+.grid3 span{font-size:.72rem;color:var(--muted)}
+.row{display:flex;justify-content:space-between;gap:10px;padding:8px 0;border-bottom:1px solid var(--line)}
+.row:last-child{border-bottom:0}
+.row .l{min-width:0}
+.row .l small{display:block;color:var(--muted)}
+.row .r{white-space:nowrap;font-variant-numeric:tabular-nums;font-weight:600;text-align:right}
+.row.total{font-weight:700}
+.dot{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:8px}
+.bar{display:flex;height:14px;border-radius:7px;overflow:hidden;background:var(--line);margin:4px 0 12px}
+.bar i{display:block;height:100%}
+.pill{display:inline-block;font-size:.7rem;padding:2px 8px;border-radius:99px;background:var(--bg);color:var(--muted);margin-left:6px;vertical-align:middle}
+.prog{height:10px;border-radius:5px;background:var(--line);overflow:hidden;margin:8px 0}
+.prog i{display:block;height:100%;background:var(--c-save)}
+.hint{background:var(--bg);border-radius:12px;padding:12px;color:var(--muted);font-size:.9rem}
+nav.tabs{position:fixed;bottom:0;left:0;right:0;background:var(--card);border-top:1px solid var(--line);display:flex;justify-content:center;padding-bottom:env(safe-area-inset-bottom)}
+nav.tabs button{flex:1;max-width:120px;background:none;border:0;color:var(--muted);padding:10px 4px 12px;font:inherit;font-size:.72rem;cursor:pointer}
+nav.tabs button span{display:block;font-size:1.3rem;line-height:1.2}
+nav.tabs button[aria-selected=true]{color:var(--accent);font-weight:700}
+button.btn{background:var(--accent);color:var(--accent-ink);border:0;border-radius:12px;padding:11px 16px;font:inherit;font-weight:600;cursor:pointer}
+button.btn.ghost{background:var(--bg);color:var(--ink);border:1px solid var(--line)}
+button.btn.danger{background:none;color:var(--bad);border:1px solid var(--line)}
+button.link{background:none;border:0;color:var(--accent);font:inherit;cursor:pointer;padding:0}
+.fab{position:fixed;right:18px;bottom:88px;width:56px;height:56px;border-radius:50%;font-size:1.8rem;line-height:1;box-shadow:0 6px 18px rgba(0,0,0,.25);padding:0}
+label{display:block;font-size:.8rem;color:var(--muted);margin:10px 0 4px}
+input,select{width:100%;font:inherit;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:10px}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+dialog{border:0;border-radius:18px;padding:18px;width:min(92vw,440px);background:var(--card);color:var(--ink);box-shadow:0 20px 60px rgba(0,0,0,.35)}
+dialog::backdrop{background:rgba(0,0,0,.45)}
+.actions{display:flex;gap:8px;margin-top:16px;justify-content:flex-end}
+.item{cursor:pointer}
+</style>
+</head>
+<body>
+<main>
+  <header class="top"><h1>Aurora Budget</h1><small id="today"></small></header>
+  <div id="view"></div>
+</main>
+<nav class="tabs" id="tabs">
+  <button data-tab="dash"><span>🏠</span>Accueil</button>
+  <button data-tab="ops"><span>🧾</span>Opérations</button>
+  <button data-tab="rec"><span>🔁</span>Fixes</button>
+  <button data-tab="card"><span>💳</span>Carte</button>
+  <button data-tab="set"><span>⚙️</span>Réglages</button>
+</nav>
+<dialog id="dlg"></dialog>
+
+<script>
+'use strict';
+/* ---------- utilitaires ---------- */
+const $=(s,el=document)=>el.querySelector(s);
+const pad=n=>String(n).padStart(2,'0');
+const iso=d=>`${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+const parse=s=>{const [y,m,d]=s.split('-').map(Number);return new Date(y,m-1,d)};
+const addDays=(d,n)=>new Date(d.getFullYear(),d.getMonth(),d.getDate()+n);
+const dim=(y,m)=>new Date(y,m+1,0).getDate();
+const dayIn=(y,m,day)=>new Date(y,m,Math.min(day,dim(y,m)));
+const daysBetween=(a,b)=>Math.round((b-a)/864e5);
+const today=()=>{const n=new Date();return new Date(n.getFullYear(),n.getMonth(),n.getDate())};
+const eur=new Intl.NumberFormat('fr-FR',{style:'currency',currency:'EUR'});
+const money=n=>eur.format(Math.round(n*100)/100+0);
+const sgn=n=>(n>0?'+':'')+money(n);
+const fd=d=>d.toLocaleDateString('fr-FR',{day:'numeric',month:'short'});
+const fdl=d=>d.toLocaleDateString('fr-FR',{weekday:'long',day:'numeric',month:'long'});
+const fmonth=d=>d.toLocaleDateString('fr-FR',{month:'long',year:'numeric'});
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,6);
+const CATS=['Logement','Charges','Abonnements','Assurances','Transport','Courses','Restaurant','Loisirs','Santé','Shopping','Autre'];
+
+/* ---------- données ---------- */
+const KEY='aurora-budget-v1';
+const defaults=()=>({settings:{payDay:10,closeDay:31,debitDay:5,refDate:iso(today()),refBalance:0,savings:0,goal:0,goalName:''},recurring:[],ops:[]});
+function load(){
+  try{const j=JSON.parse(localStorage.getItem(KEY));
+    if(j&&j.settings){const d=defaults();return {...d,...j,settings:{...d.settings,...j.settings}}}}catch(e){}
+  return defaults();
+}
+let S=load();
+const save=()=>{try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}};
+
+/* ---------- moteur de calcul ---------- */
+// Transactions "économiques" générées (récurrentes + ponctuelles) entre deux dates incluses.
+function genTx(from,to){
+  const out=[];
+  const k0=from.getFullYear()*12+from.getMonth(), k1=to.getFullYear()*12+to.getMonth();
+  for(const r of S.recurring){
+    const method=r.kind==='expense'?r.method:'account';
+    for(let k=k0;k<=k1;k++){
+      const d=dayIn(Math.floor(k/12),k%12,r.day);
+      if(d>=from&&d<=to) out.push({date:d,label:r.label,kind:r.kind,amount:r.amount,method,cat:r.cat,rec:true,id:r.id});
+    }
+  }
+  for(const o of S.ops){
+    const d=parse(o.date);
+    if(d>=from&&d<=to) out.push({date:d,label:o.label,kind:o.kind,amount:o.amount,method:o.kind==='expense'?o.method:'account',cat:o.cat,rec:false,id:o.id});
+  }
+  return out;
+}
+const signed=t=>t.kind==='income'?t.amount:-t.amount;
+
+// Relevé de carte auquel appartient un achat : clôture (fin de mois par défaut) puis débit le jour choisi du mois suivant.
+function stmtOf(d){
+  const cd=S.settings.closeDay; let y=d.getFullYear(), m=d.getMonth();
+  if(d.getDate()>Math.min(cd,dim(y,m))) m++;
+  const close=dayIn(y,m,cd);
+  return {key:iso(close),close,debit:dayIn(y,m+1,S.settings.debitDay)};
+}
+// Relevés dont le débit tombe dans [from,to], avec leurs achats.
+function statementsByDebit(from,to){
+  const map={};
+  for(const t of genTx(addDays(from,-75),to)){
+    if(t.method!=='card') continue;
+    const s=stmtOf(t.date);
+    const e=map[s.key]||(map[s.key]={...s,total:0,items:[]});
+    e.total+=t.amount; e.items.push(t);
+  }
+  return Object.values(map).filter(s=>s.debit>=from&&s.debit<=to).sort((a,b)=>a.debit-b.debit);
+}
+// Mouvements réels sur le compte courant (les achats carte n'y apparaissent qu'au débit du relevé).
+function acctEvents(from,to){
+  if(from>to) return [];
+  const ev=genTx(from,to).filter(t=>t.method==='account')
+    .map(t=>({date:t.date,label:t.label,amount:signed(t),kind:t.kind,cat:t.cat,type:t.rec?'rec':'op'}));
+  for(const s of statementsByDebit(from,to))
+    ev.push({date:s.debit,label:'Débit carte · relevé de '+fmonth(s.close),amount:-s.total,kind:'card',type:'card'});
+  return ev.sort((a,b)=>a.date-b.date);
+}
+const refDate=()=>parse(S.settings.refDate);
+function balanceAt(d){
+  const r=refDate(); if(d<=r) return S.settings.refBalance;
+  return S.settings.refBalance+acctEvents(addDays(r,1),d).reduce((a,e)=>a+e.amount,0);
+}
+function savingsAt(d){
+  const r=refDate(); if(d<=r) return S.settings.savings;
+  return S.settings.savings+genTx(addDays(r,1),d).filter(t=>t.kind==='savings').reduce((a,t)=>a+t.amount,0);
+}
+function paydayOnOrBefore(d){
+  const p=S.settings.payDay; let x=dayIn(d.getFullYear(),d.getMonth(),p);
+  if(x>d) x=dayIn(d.getFullYear(),d.getMonth()-1,p);
+  return x;
+}
+const nextPay=p=>dayIn(p.getFullYear(),p.getMonth()+1,S.settings.payDay);
+// Bilan d'une période de paie (revenus - fixes - épargne - carte - dépenses courantes).
+function summary(start,end){
+  const s={income:0,fixed:0,savings:0,card:0,variable:0};
+  for(const t of genTx(start,end)){
+    if(t.kind==='income') s.income+=t.amount;
+    else if(t.kind==='savings') s.savings+=t.amount;
+    else if(t.method==='account') t.rec?s.fixed+=t.amount:s.variable+=t.amount;
+  }
+  s.card=statementsByDebit(start,end).reduce((a,x)=>a+x.total,0);
+  s.left=s.income-s.fixed-s.savings-s.card-s.variable;
+  return s;
+}
+const monthly=kind=>S.recurring.filter(r=>r.kind===kind).reduce((a,r)=>a+r.amount,0);
+
+/* ---------- rendu ---------- */
+let tab='dash';
+const view=$('#view');
+
+function planBar(s){
+  const parts=[['Charges fixes',s.fixed,'--c-fixed'],['Épargne',s.savings,'--c-save'],['Carte',s.card,'--c-card'],['Dépenses courantes',s.variable,'--c-var'],['Reste',Math.max(s.left,0),'--c-left']];
+  const tot=parts.reduce((a,p)=>a+p[1],0)||1;
+  return `<div class="bar">${parts.map(p=>`<i style="width:${p[1]/tot*100}%;background:var(${p[2]})"></i>`).join('')}</div>`+
+    parts.slice(0,4).map(p=>`<div class="row"><span><span class="dot" style="background:var(${p[2]})"></span>${p[0]}</span><span class="r">− ${money(p[1])}</span></div>`).join('');
+}
+
+function dashboard(){
+  const T=today(), ps=paydayOnOrBefore(T), np=nextPay(ps), end=addDays(np,-1);
+  const bal=balanceAt(T);
+  const up=acctEvents(addDays(T,1),end);
+  const rav=bal+up.reduce((a,e)=>a+e.amount,0);
+  const days=daysBetween(T,np), perDay=rav/days;
+  const cur=summary(ps,end), nxt=summary(np,addDays(nextPay(np),-1));
+  const cls=rav<0?'bad':perDay<10?'warn':'good';
+  const empty=!S.recurring.length&&!S.ops.length;
+  const sav=savingsAt(T), sm=monthly('savings');
+  const st=stmtOf(T), open=statementsByDebit(st.debit,st.debit)[0];
+  const spent=open?open.items.filter(i=>i.date<=T).reduce((a,i)=>a+i.amount,0):0;
+
+  let h='';
+  if(empty) h+=`<div class="card hint">👋 Bienvenue ! Commence par <b>Réglages</b> (solde du compte, jour de paie, carte), puis ajoute ton salaire et tes charges dans <b>Fixes</b>. Ou <button class="link" data-a="demo">charge un exemple</button>.</div>`;
+  h+=`<div class="card hero">
+    <h2>Reste à vivre jusqu'à la paie</h2>
+    <div class="big ${cls}">${money(rav)}</div>
+    <div class="sub">${rav<0?'⚠️ Découvert prévu avant la paie':`≈ <b>${money(perDay)}</b> par jour · ${days} jour${days>1?'s':''}`} · paie le ${fdl(np)}</div>
+    <div class="grid3">
+      <div><b>${money(bal)}</b><span>Solde aujourd'hui</span></div>
+      <div><b>${money(up.reduce((a,e)=>a+e.amount,0))}</b><span>À venir avant paie</span></div>
+      <div><b>${money(sav)}</b><span>Épargne</span></div>
+    </div></div>`;
+
+  h+=`<div class="card"><h2>À venir avant la paie</h2>${up.length?up.map(e=>`<div class="row"><div class="l">${esc(e.label)}<small>${fd(e.date)}</small></div><div class="r ${e.amount>0?'good':''}">${sgn(e.amount)}</div></div>`).join(''):'<div class="muted">Rien de prévu jusqu\'à la paie.</div>'}</div>`;
+
+  h+=`<div class="card"><h2>Période en cours · ${fd(ps)} → ${fd(end)}</h2>
+    <div class="row"><span>Revenus</span><span class="r good">+ ${money(cur.income)}</span></div>
+    ${planBar(cur)}
+    <div class="row total"><span>Reste à vivre de la période</span><span class="r ${cur.left<0?'bad':'good'}">${money(cur.left)}</span></div></div>`;
+
+  h+=`<div class="card"><h2>Carte à paiement différé</h2>
+    <div class="row"><div class="l">Relevé en cours (${fmonth(st.close)})<small>Débité le ${fd(st.debit)}</small></div><div class="r">${money(open?open.total:0)}</div></div>
+    <div class="row"><div class="l">Déjà dépensé à ce jour<small>reste prévu : ${money((open?open.total:0)-spent)}</small></div><div class="r">${money(spent)}</div></div>
+    <div class="row"><div class="l">Déjà engagé sur la période suivante<small>débits carte après le ${fd(np)}</small></div><div class="r warn">${money(nxt.card)}</div></div></div>`;
+
+  h+=`<div class="card"><h2>Prévision période suivante · ${fd(np)} → ${fd(addDays(nextPay(np),-1))}</h2>
+    <div class="row"><span>Revenus attendus</span><span class="r good">+ ${money(nxt.income)}</span></div>
+    <div class="row"><span>Charges fixes</span><span class="r">− ${money(nxt.fixed)}</span></div>
+    <div class="row"><span>Épargne</span><span class="r">− ${money(nxt.savings)}</span></div>
+    <div class="row"><span>Carte déjà dépensée</span><span class="r">− ${money(nxt.card)}</span></div>
+    <div class="row total"><span>Reste à vivre prévisionnel</span><span class="r ${nxt.left<0?'bad':'good'}">${money(nxt.left)}</span></div></div>`;
+
+  const g=S.settings.goal;
+  h+=`<div class="card"><h2>Épargne</h2>
+    <div class="row"><span>Solde épargne</span><span class="r">${money(sav)}</span></div>
+    <div class="row"><span>Virement mensuel</span><span class="r">${money(sm)}</span></div>`;
+  if(g>0){
+    const pct=Math.min(100,sav/g*100), rest=Math.max(0,g-sav);
+    h+=`<div class="prog"><i style="width:${pct}%"></i></div>
+      <div class="muted">${esc(S.settings.goalName||'Objectif')} : ${money(sav)} / ${money(g)} (${pct.toFixed(0)} %)${rest>0&&sm>0?` · atteint dans ~${Math.ceil(rest/sm)} mois`:''}</div>`;
+  }
+  return h+'</div>';
+}
+
+function opsView(){
+  const list=[...S.ops].sort((a,b)=>b.date.localeCompare(a.date)).slice(0,150);
+  return `<div class="card"><h2>Opérations ponctuelles</h2>${list.length?list.map(o=>`
+    <div class="row item" data-a="edit-op" data-id="${o.id}"><div class="l">${esc(o.label)}<small>${fd(parse(o.date))} · ${esc(o.cat)} · ${o.kind==='expense'&&o.method==='card'?'💳 carte':'compte'}</small></div>
+    <div class="r ${o.kind==='income'?'good':''}">${o.kind==='income'?'+':'−'} ${money(o.amount)}</div></div>`).join(''):'<div class="muted">Aucune opération. Appuie sur + pour noter une dépense faite par carte ou depuis ton compte.</div>'}</div>
+    <button class="btn fab" data-a="add-op" aria-label="Ajouter">+</button>`;
+}
+
+function recView(){
+  const groups=[['income','Revenus','good'],['expense','Charges & dépenses fixes',''],['savings','Épargne','']];
+  const inc=monthly('income'), out=monthly('expense'), sv=monthly('savings');
+  let h=groups.map(([k,title,c])=>{
+    const l=S.recurring.filter(r=>r.kind===k).sort((a,b)=>a.day-b.day);
+    return `<div class="card"><h2>${title}</h2>${l.length?l.map(r=>`<div class="row item" data-a="edit-rec" data-id="${r.id}"><div class="l">${esc(r.label)}<small>le ${r.day} du mois${k==='expense'?` · ${esc(r.cat)} · ${r.method==='card'?'💳 carte':'compte'}`:''}</small></div><div class="r ${c}">${money(r.amount)}</div></div>`).join(''):'<div class="muted">Rien pour l\'instant.</div>'}</div>`;
+  }).join('');
+  h+=`<div class="card"><h2>Bilan mensuel théorique</h2>
+    <div class="row"><span>Revenus</span><span class="r good">+ ${money(inc)}</span></div>
+    <div class="row"><span>Charges fixes</span><span class="r">− ${money(out)}</span></div>
+    <div class="row"><span>Épargne</span><span class="r">− ${money(sv)}</span></div>
+    <div class="row total"><span>Disponible avant dépenses courantes</span><span class="r">${money(inc-out-sv)}</span></div></div>
+    <button class="btn fab" data-a="add-rec" aria-label="Ajouter">+</button>`;
+  return h;
+}
+
+function cardView(){
+  const T=today();
+  const sts=statementsByDebit(addDays(T,-40),addDays(T,75));
+  return `<div class="card hint">Les achats faits par carte sont regroupés par relevé (clôture le <b>${S.settings.closeDay>=31?'dernier jour du mois':S.settings.closeDay}</b>) et débités le <b>${S.settings.debitDay}</b> du mois suivant. Modifiable dans Réglages.</div>`+
+    (sts.length?sts.map(s=>`<div class="card"><h2>Relevé de ${fmonth(s.close)} <span class="pill">débit le ${fd(s.debit)}${s.debit<=T?' · débité':''}</span></h2>
+      ${s.items.sort((a,b)=>a.date-b.date).map(i=>`<div class="row"><div class="l">${esc(i.label)}<small>${fd(i.date)}${i.rec?' · fixe':''}${i.date>T?' · à venir':''}</small></div><div class="r">${money(i.amount)}</div></div>`).join('')}
+      <div class="row total"><span>Total</span><span class="r">${money(s.total)}</span></div></div>`).join(''):'<div class="card muted">Aucun achat par carte.</div>');
+}
+
+function setView(){
+  const st=S.settings, T=today();
+  return `<form class="card" id="setForm"><h2>Compte & paie</h2>
+    <label>Solde actuel du compte courant (€)</label><input name="bal" type="number" step="0.01" value="${balanceAt(T).toFixed(2)}" required>
+    <label>Solde actuel de l'épargne (€)</label><input name="sav" type="number" step="0.01" value="${savingsAt(T).toFixed(2)}" required>
+    <label>Jour de paie</label><input name="payDay" type="number" min="1" max="31" value="${st.payDay}" required>
+    <h2 style="margin-top:20px">Carte à paiement différé</h2>
+    <div class="two"><div><label>Jour de clôture (31 = fin de mois)</label><input name="closeDay" type="number" min="1" max="31" value="${st.closeDay}" required></div>
+    <div><label>Jour de débit (mois suivant)</label><input name="debitDay" type="number" min="1" max="31" value="${st.debitDay}" required></div></div>
+    <h2 style="margin-top:20px">Objectif d'épargne</h2>
+    <div class="two"><div><label>Nom</label><input name="goalName" value="${esc(st.goalName)}" placeholder="Vacances, apport…"></div>
+    <div><label>Montant (€)</label><input name="goal" type="number" min="0" step="1" value="${st.goal||''}"></div></div>
+    <div class="actions"><button class="btn" type="submit">Enregistrer</button></div>
+    <p class="muted" style="font-size:.85rem">Enregistrer recale le solde : les charges, la paie et les débits carte sont ensuite déduits automatiquement à leur date.</p></form>
+    <div class="card"><h2>Données</h2>
+      <p class="muted" style="margin-top:0">Tout est stocké uniquement sur cet appareil (navigateur). Pense à exporter une sauvegarde.</p>
+      <div class="actions" style="justify-content:flex-start;flex-wrap:wrap">
+      <button class="btn ghost" data-a="export">Exporter</button>
+      <button class="btn ghost" data-a="import">Importer</button>
+      <button class="btn ghost" data-a="demo">Exemple</button>
+      <button class="btn danger" data-a="reset">Tout effacer</button></div>
+      <input type="file" id="file" accept="application/json" hidden></div>`;
+}
+
+function render(){
+  $('#today').textContent=fdl(today());
+  document.querySelectorAll('#tabs button').forEach(b=>b.setAttribute('aria-selected',b.dataset.tab===tab));
+  view.innerHTML={dash:dashboard,ops:opsView,rec:recView,card:cardView,set:setView}[tab]();
+}
+
+/* ---------- formulaires ---------- */
+const dlg=$('#dlg');
+const opts=(list,sel)=>list.map(v=>`<option${v===sel?' selected':''}>${esc(v)}</option>`).join('');
+function openForm(type,item){
+  const isOp=type==='op';
+  const it=item||(isOp?{date:iso(today()),label:'',amount:'',kind:'expense',method:'card',cat:'Courses'}:{label:'',amount:'',day:1,kind:'expense',method:'account',cat:'Logement'});
+  dlg.innerHTML=`<form method="dialog" id="f"><h2>${item?'Modifier':'Ajouter'} ${isOp?'une opération':'un élément fixe'}</h2>
+    <label>Libellé</label><input name="label" value="${esc(it.label)}" required autofocus>
+    <div class="two"><div><label>Montant (€)</label><input name="amount" type="number" step="0.01" min="0.01" value="${it.amount}" required></div>
+    <div><label>${isOp?'Date':'Jour du mois'}</label>${isOp?`<input name="date" type="date" value="${it.date}" required>`:`<input name="day" type="number" min="1" max="31" value="${it.day}" required>`}</div></div>
+    <div class="two"><div><label>Type</label><select name="kind">
+      <option value="expense"${it.kind==='expense'?' selected':''}>Dépense</option>
+      <option value="income"${it.kind==='income'?' selected':''}>${isOp?'Revenu':'Revenu (salaire…)'}</option>
+      ${isOp?'':`<option value="savings"${it.kind==='savings'?' selected':''}>Épargne</option>`}</select></div>
+    <div id="mwrap"><label>Payé avec</label><select name="method"><option value="account"${it.method==='account'?' selected':''}>Compte</option><option value="card"${it.method==='card'?' selected':''}>Carte différée</option></select></div></div>
+    <div id="cwrap"><label>Catégorie</label><select name="cat">${opts(CATS,it.cat)}</select></div>
+    <div class="actions">${item?'<button class="btn danger" type="button" id="del">Supprimer</button>':''}<button class="btn ghost" type="button" id="cancel">Annuler</button><button class="btn" type="submit">Enregistrer</button></div></form>`;
+  const f=$('#f'), sync=()=>{const k=f.kind.value;$('#mwrap').style.display=k==='expense'?'':'none';$('#cwrap').style.display=k==='expense'?'':'none'};
+  f.kind.onchange=sync; sync();
+  $('#cancel').onclick=()=>dlg.close();
+  if(item) $('#del').onclick=()=>{ if(confirm('Supprimer ?')){ (isOp?S.ops:S.recurring).splice((isOp?S.ops:S.recurring).findIndex(x=>x.id===item.id),1); save(); dlg.close(); render(); } };
+  f.onsubmit=e=>{
+    e.preventDefault();
+    const v=Object.fromEntries(new FormData(f));
+    const o={id:it.id||uid(),label:v.label.trim(),amount:Math.abs(parseFloat(v.amount)),kind:v.kind,method:v.kind==='expense'?v.method:'account',cat:v.cat};
+    if(!o.label||!(o.amount>0)) return;
+    if(isOp) o.date=v.date; else o.day=Math.min(31,Math.max(1,parseInt(v.day)||1));
+    const arr=isOp?S.ops:S.recurring, i=arr.findIndex(x=>x.id===o.id);
+    i>=0?arr[i]=o:arr.push(o);
+    save(); dlg.close(); render();
+  };
+  dlg.showModal();
+}
+
+/* ---------- actions ---------- */
+function demo(){
+  if((S.recurring.length||S.ops.length)&&!confirm('Remplacer tes données par un exemple ?')) return;
+  const T=today(), d=n=>iso(addDays(T,-n)), r=(label,amount,day,kind,method,cat)=>({id:uid(),label,amount,day,kind,method,cat});
+  S={settings:{payDay:10,closeDay:31,debitDay:5,refDate:iso(T),refBalance:1400,savings:2500,goal:5000,goalName:'Voyage'},
+    recurring:[r('Salaire',2100,10,'income','account','Autre'),r('Loyer',750,5,'expense','account','Logement'),r('Électricité',60,12,'expense','account','Charges'),
+      r('Internet',30,15,'expense','account','Charges'),r('Forfait mobile',15,20,'expense','account','Charges'),r('Assurance habitation',45,8,'expense','account','Assurances'),
+      r('Netflix',13.49,3,'expense','card','Abonnements'),r('Spotify',10.99,14,'expense','card','Abonnements'),r('Virement épargne',200,11,'savings','account','Autre')],
+    ops:[{id:uid(),date:d(2),label:'Courses',amount:64.3,kind:'expense',method:'card',cat:'Courses'},{id:uid(),date:d(5),label:'Restaurant',amount:38,kind:'expense',method:'card',cat:'Restaurant'},{id:uid(),date:d(1),label:'Essence',amount:52,kind:'expense',method:'card',cat:'Transport'}]};
+  save(); tab='dash'; render();
+}
+const actions={
+  'add-op':()=>openForm('op'), 'add-rec':()=>openForm('rec'),
+  'edit-op':el=>openForm('op',S.ops.find(x=>x.id===el.dataset.id)),
+  'edit-rec':el=>openForm('rec',S.recurring.find(x=>x.id===el.dataset.id)),
+  demo,
+  export:()=>{const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([JSON.stringify(S,null,1)],{type:'application/json'}));a.download=`aurora-budget-${iso(today())}.json`;a.click()},
+  import:()=>$('#file').click(),
+  reset:()=>{if(confirm('Tout effacer définitivement ?')){S=defaults();save();render()}}
+};
+document.addEventListener('click',e=>{
+  const t=e.target.closest('[data-tab]'); if(t){tab=t.dataset.tab;render();scrollTo(0,0);return}
+  const a=e.target.closest('[data-a]'); if(a&&actions[a.dataset.a]) actions[a.dataset.a](a);
+});
+document.addEventListener('change',e=>{
+  if(e.target.id!=='file') return;
+  const f=e.target.files[0]; if(!f) return;
+  f.text().then(t=>{const j=JSON.parse(t); if(!j.settings) throw 0; const d=defaults(); S={...d,...j,settings:{...d.settings,...j.settings}}; save(); render()}).catch(()=>alert('Fichier invalide.'));
+});
+document.addEventListener('submit',e=>{
+  if(e.target.id!=='setForm') return;
+  e.preventDefault();
+  const v=Object.fromEntries(new FormData(e.target)), n=k=>parseFloat(v[k])||0, day=k=>Math.min(31,Math.max(1,parseInt(v[k])||1));
+  S.settings={...S.settings,payDay:day('payDay'),closeDay:day('closeDay'),debitDay:day('debitDay'),refDate:iso(today()),refBalance:n('bal'),savings:n('sav'),goal:n('goal'),goalName:v.goalName.trim()};
+  save(); tab='dash'; render();
+});
+// Recalcule à minuit / au retour sur l'appli
+document.addEventListener('visibilitychange',()=>{if(!document.hidden&&!dlg.open)render()});
+render();
+</script>
+</body>
+</html>
