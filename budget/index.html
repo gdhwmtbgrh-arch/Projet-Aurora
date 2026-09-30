@@ -108,7 +108,7 @@ const CATS=['Logement','Charges','Abonnements','Assurances','Transport','Courses
 
 /* ---------- données ---------- */
 const KEY='aurora-budget-v1';
-const defaults=()=>({settings:{payDay:10,closeDay:31,debitDay:5,refDate:iso(today()),refBalance:0,savings:0,goal:0,goalName:'',budgets:{}},recurring:[],ops:[]});
+const defaults=()=>({settings:{payDay:10,cycleStart:20,debitBefore:2,refDate:iso(today()),refBalance:0,savings:0,goal:0,goalName:'',budgets:{}},recurring:[],ops:[]});
 function load(){
   try{const j=JSON.parse(localStorage.getItem(KEY));
     if(j&&j.settings){const d=defaults();return {...d,...j,settings:{...d.settings,...j.settings}}}}catch(e){}
@@ -137,12 +137,12 @@ function genTx(from,to){
 }
 const signed=t=>t.kind==='income'?t.amount:-t.amount;
 
-// Relevé de carte auquel appartient un achat : clôture (fin de mois par défaut) puis débit le jour choisi du mois suivant.
+// Relevé de carte : un cycle démarre le jour `cycleStart` (ex. le 20) et le débit a lieu `debitBefore` jours avant le début du cycle suivant.
 function stmtOf(d){
-  const cd=S.settings.closeDay; let y=d.getFullYear(), m=d.getMonth();
-  if(d.getDate()>Math.min(cd,dim(y,m))) m++;
-  const close=dayIn(y,m,cd);
-  return {key:iso(close),close,debit:dayIn(y,m+1,S.settings.debitDay)};
+  const cs=S.settings.cycleStart; let y=d.getFullYear(), m=d.getMonth();
+  if(d.getDate()<Math.min(cs,dim(y,m))) m--;
+  const next=dayIn(y,m+1,cs);
+  return {key:iso(dayIn(y,m,cs)),close:addDays(next,-1),debit:addDays(next,-S.settings.debitBefore)};
 }
 // Relevés dont le débit tombe dans [from,to], avec leurs achats.
 function statementsByDebit(from,to){
@@ -295,7 +295,7 @@ function recView(){
 function cardView(){
   const T=today();
   const sts=statementsByDebit(addDays(T,-40),addDays(T,75));
-  return `<div class="card hint">Les achats faits par carte sont regroupés par relevé (clôture le <b>${S.settings.closeDay>=31?'dernier jour du mois':S.settings.closeDay}</b>) et débités le <b>${S.settings.debitDay}</b> du mois suivant. Modifiable dans Réglages.</div>`+
+  return `<div class="card hint">Les achats faits par carte sont regroupés par relevé (un cycle commence le <b>${S.settings.cycleStart}</b> de chaque mois) et débités <b>${S.settings.debitBefore} jour${S.settings.debitBefore>1?'s':''}</b> avant le début du cycle suivant. Modifiable dans Réglages.</div>`+
     (sts.length?sts.map(s=>`<div class="card"><h2>Relevé de ${fmonth(s.close)} <span class="pill">débit le ${fd(s.debit)}${s.debit<=T?' · débité':''}</span></h2>
       ${s.items.sort((a,b)=>a.date-b.date).map(i=>`<div class="row"><div class="l">${esc(i.label)}<small>${fd(i.date)}${i.rec?' · fixe':''}${i.date>T?' · à venir':''}</small></div><div class="r">${money(i.amount)}</div></div>`).join('')}
       <div class="row total"><span>Total</span><span class="r">${money(s.total)}</span></div></div>`).join(''):'<div class="card muted">Aucun achat par carte.</div>');
@@ -308,8 +308,8 @@ function setView(){
     <label>Solde actuel de l'épargne (€)</label><input name="sav" type="number" step="0.01" value="${savingsAt(T).toFixed(2)}" required>
     <label>Jour de paie</label><input name="payDay" type="number" min="1" max="31" value="${st.payDay}" required>
     <h2 style="margin-top:20px">Carte à paiement différé</h2>
-    <div class="two"><div><label>Jour de clôture (31 = fin de mois)</label><input name="closeDay" type="number" min="1" max="31" value="${st.closeDay}" required></div>
-    <div><label>Jour de débit (mois suivant)</label><input name="debitDay" type="number" min="1" max="31" value="${st.debitDay}" required></div></div>
+    <div class="two"><div><label>Début du cycle (jour du mois)</label><input name="cycleStart" type="number" min="1" max="31" value="${st.cycleStart}" required></div>
+    <div><label>Débit : jours avant le cycle suivant</label><input name="debitBefore" type="number" min="0" max="28" value="${st.debitBefore}" required></div></div>
     <h2 style="margin-top:20px">Objectif d'épargne</h2>
     <div class="two"><div><label>Nom</label><input name="goalName" value="${esc(st.goalName)}" placeholder="Vacances, apport…"></div>
     <div><label>Montant (€)</label><input name="goal" type="number" min="0" step="1" value="${st.goal||''}"></div></div>
@@ -371,7 +371,7 @@ function openForm(type,item){
 function demo(){
   if((S.recurring.length||S.ops.length)&&!confirm('Remplacer tes données par un exemple ?')) return;
   const T=today(), d=n=>iso(addDays(T,-n)), r=(label,amount,day,kind,method,cat)=>({id:uid(),label,amount,day,kind,method,cat});
-  S={settings:{payDay:10,closeDay:31,debitDay:5,refDate:iso(T),refBalance:1400,savings:2500,goal:5000,goalName:'Voyage'},
+  S={settings:{payDay:10,cycleStart:20,debitBefore:2,refDate:iso(T),refBalance:1400,savings:2500,goal:5000,goalName:'Voyage'},
     recurring:[r('Salaire',2100,10,'income','account','Autre'),r('Loyer',750,5,'expense','account','Logement'),r('Électricité',60,12,'expense','account','Charges'),
       r('Internet',30,15,'expense','account','Charges'),r('Forfait mobile',15,20,'expense','account','Charges'),r('Assurance habitation',45,8,'expense','account','Assurances'),
       r('Netflix',13.49,3,'expense','card','Abonnements'),r('Spotify',10.99,14,'expense','card','Abonnements'),r('Virement épargne',200,11,'savings','account','Autre')],
@@ -400,7 +400,7 @@ document.addEventListener('submit',e=>{
   if(e.target.id!=='setForm') return;
   e.preventDefault();
   const v=Object.fromEntries(new FormData(e.target)), n=k=>parseFloat(v[k])||0, day=k=>Math.min(31,Math.max(1,parseInt(v[k])||1));
-  S.settings={...S.settings,payDay:day('payDay'),closeDay:day('closeDay'),debitDay:day('debitDay'),refDate:iso(today()),refBalance:n('bal'),savings:n('sav'),goal:n('goal'),goalName:v.goalName.trim(),budgets:Object.fromEntries(CATS.map(c=>[c,n('b_'+c)]).filter(x=>x[1]>0))};
+  S.settings={...S.settings,payDay:day('payDay'),cycleStart:day('cycleStart'),debitBefore:Math.min(28,Math.max(0,parseInt(v.debitBefore)||0)),refDate:iso(today()),refBalance:n('bal'),savings:n('sav'),goal:n('goal'),goalName:v.goalName.trim(),budgets:Object.fromEntries(CATS.map(c=>[c,n('b_'+c)]).filter(x=>x[1]>0))};
   save(); tab='dash'; render();
 });
 // Recalcule à minuit / au retour sur l'appli
