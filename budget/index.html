@@ -5,6 +5,11 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Aurora Budget</title>
 <meta name="theme-color" content="#0f766e">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon.svg">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
 <style>
 :root{
   --bg:#f4f6f8; --card:#fff; --ink:#14202b; --muted:#66778a; --line:#e3e8ee;
@@ -103,7 +108,7 @@ const CATS=['Logement','Charges','Abonnements','Assurances','Transport','Courses
 
 /* ---------- données ---------- */
 const KEY='aurora-budget-v1';
-const defaults=()=>({settings:{payDay:10,closeDay:31,debitDay:5,refDate:iso(today()),refBalance:0,savings:0,goal:0,goalName:''},recurring:[],ops:[]});
+const defaults=()=>({settings:{payDay:10,closeDay:31,debitDay:5,refDate:iso(today()),refBalance:0,savings:0,goal:0,goalName:'',budgets:{}},recurring:[],ops:[]});
 function load(){
   try{const j=JSON.parse(localStorage.getItem(KEY));
     if(j&&j.settings){const d=defaults();return {...d,...j,settings:{...d.settings,...j.settings}}}}catch(e){}
@@ -243,6 +248,14 @@ function dashboard(){
     <div class="row"><span>Carte déjà dépensée</span><span class="r">− ${money(nxt.card)}</span></div>
     <div class="row total"><span>Reste à vivre prévisionnel</span><span class="r ${nxt.left<0?'bad':'good'}">${money(nxt.left)}</span></div></div>`;
 
+  const bud=Object.entries(S.settings.budgets||{}).filter(([,v])=>v>0);
+  if(bud.length){
+    const byCat={};
+    for(const t of genTx(ps,end)) if(t.kind==='expense') byCat[t.cat]=(byCat[t.cat]||0)+t.amount;
+    h+=`<div class="card"><h2>Budgets par catégorie · période</h2>${bud.map(([c,v])=>{
+      const u=byCat[c]||0, pct=u/v*100, col=pct>100?'var(--bad)':pct>80?'var(--warn)':'var(--good)';
+      return `<div class="row" style="border:0;padding-bottom:0"><span>${esc(c)}</span><span class="r ${pct>100?'bad':''}">${money(u)} / ${money(v)}</span></div><div class="prog"><i style="width:${Math.min(100,pct)}%;background:${col}"></i></div>`}).join('')}</div>`;
+  }
   const g=S.settings.goal;
   h+=`<div class="card"><h2>Épargne</h2>
     <div class="row"><span>Solde épargne</span><span class="r">${money(sav)}</span></div>
@@ -300,6 +313,8 @@ function setView(){
     <h2 style="margin-top:20px">Objectif d'épargne</h2>
     <div class="two"><div><label>Nom</label><input name="goalName" value="${esc(st.goalName)}" placeholder="Vacances, apport…"></div>
     <div><label>Montant (€)</label><input name="goal" type="number" min="0" step="1" value="${st.goal||''}"></div></div>
+    <h2 style="margin-top:20px">Budgets mensuels par catégorie (€)</h2>
+    <div class="two">${CATS.map(c=>`<div><label>${c}</label><input name="b_${c}" type="number" min="0" step="1" value="${(st.budgets||{})[c]||''}" placeholder="—"></div>`).join('')}</div>
     <div class="actions"><button class="btn" type="submit">Enregistrer</button></div>
     <p class="muted" style="font-size:.85rem">Enregistrer recale le solde : les charges, la paie et les débits carte sont ensuite déduits automatiquement à leur date.</p></form>
     <div class="card"><h2>Données</h2>
@@ -385,12 +400,13 @@ document.addEventListener('submit',e=>{
   if(e.target.id!=='setForm') return;
   e.preventDefault();
   const v=Object.fromEntries(new FormData(e.target)), n=k=>parseFloat(v[k])||0, day=k=>Math.min(31,Math.max(1,parseInt(v[k])||1));
-  S.settings={...S.settings,payDay:day('payDay'),closeDay:day('closeDay'),debitDay:day('debitDay'),refDate:iso(today()),refBalance:n('bal'),savings:n('sav'),goal:n('goal'),goalName:v.goalName.trim()};
+  S.settings={...S.settings,payDay:day('payDay'),closeDay:day('closeDay'),debitDay:day('debitDay'),refDate:iso(today()),refBalance:n('bal'),savings:n('sav'),goal:n('goal'),goalName:v.goalName.trim(),budgets:Object.fromEntries(CATS.map(c=>[c,n('b_'+c)]).filter(x=>x[1]>0))};
   save(); tab='dash'; render();
 });
 // Recalcule à minuit / au retour sur l'appli
 document.addEventListener('visibilitychange',()=>{if(!document.hidden&&!dlg.open)render()});
 render();
+if('serviceWorker' in navigator&&location.protocol.startsWith('http')) navigator.serviceWorker.register('sw.js').catch(()=>{});
 </script>
 </body>
 </html>
