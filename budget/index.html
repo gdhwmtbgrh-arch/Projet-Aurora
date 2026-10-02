@@ -68,6 +68,10 @@ dialog{border:0;border-radius:18px;padding:18px;width:min(92vw,440px);background
 dialog::backdrop{background:rgba(0,0,0,.45)}
 .actions{display:flex;gap:8px;margin-top:16px;justify-content:flex-end}
 .item{cursor:pointer}
+details.more{margin-bottom:14px}
+details.more>summary{cursor:pointer;padding:12px 16px;background:var(--card);border:1px solid var(--line);border-radius:16px;color:var(--muted);font-weight:600;list-style:none}
+details.more[open]>summary{margin-bottom:14px}
+.quick .two{align-items:center}
 </style>
 </head>
 <body>
@@ -83,6 +87,7 @@ dialog::backdrop{background:rgba(0,0,0,.45)}
   <button data-tab="set"><span>⚙️</span>Réglages</button>
 </nav>
 <dialog id="dlg"></dialog>
+<input type="file" id="file" accept="application/json" hidden>
 
 <script>
 'use strict';
@@ -221,18 +226,30 @@ function dashboard(){
   const spent=open?open.items.filter(i=>i.date<=T).reduce((a,i)=>a+i.amount,0):0;
 
   let h='';
-  if(empty) h+=`<div class="card hint">👋 Bienvenue ! Commence par <b>Réglages</b> (solde du compte, jour de paie, carte), puis ajoute ton salaire et tes charges dans <b>Fixes</b>. Ou <button class="link" data-a="demo">charge un exemple</button>.</div>`;
-  h+=`<div class="card hero">
-    <h2>Reste à vivre jusqu'à la paie</h2>
+  const outflow=up.reduce((a,e)=>a+e.amount,0);
+  const spentNow=S.ops.filter(o=>o.kind==='expense'&&parse(o.date)>=ps&&parse(o.date)<=T).reduce((a,o)=>a+o.amount,0);
+  const cardDue=open?open.total:0;
+  let top='';
+  if(empty) top+=`<div class="card hint">👋 Bienvenue ! <button class="btn" data-a="import">Importer mon fichier</button> <button class="btn ghost" data-a="go-set">Commencer de zéro</button></div>`;
+  top+=`<div class="card hero">
+    <h2>Il me reste à dépenser jusqu'au ${fd(np)}</h2>
     <div class="big ${cls}">${money(rav)}</div>
-    <div class="sub">${rav<0?'⚠️ Découvert prévu avant la paie':`≈ <b>${money(perDay)}</b> par jour · ${days} jour${days>1?'s':''}`} · paie le ${fdl(np)}</div>
+    <div class="sub">${rav<0?'⚠️ Le compte sera à découvert avant la paie':`≈ <b>${money(perDay)}</b> par jour · ${days} jour${days>1?'s':''}`}</div>
     <div class="grid3">
-      <div><b>${money(bal)}</b><span>Solde aujourd'hui</span></div>
-      <div><b>${money(up.reduce((a,e)=>a+e.amount,0))}</b><span>À venir avant paie</span></div>
-      <div><b>${money(sav)}</b><span>Épargne</span></div>
-    </div></div>`;
+      <div><b>${money(bal)}</b><span>Compte aujourd'hui</span></div>
+      <div><b>${money(spentNow)}</b><span>Dépensé depuis le ${fd(ps)}</span></div>
+      <div><b>${money(cardDue)}</b><span>Carte à débiter le ${fd(st.debit)}</span></div>
+    </div></div>
+    <form class="card quick" id="quick"><h2>Noter une dépense</h2>
+      <div class="two"><input name="amount" type="number" step="0.01" min="0.01" placeholder="Montant €" required><input name="label" placeholder="Quoi ? (courses…)"></div>
+      <div class="two" style="margin-top:8px"><select name="method"><option value="card"${S.settings.lastMethod!=='account'?' selected':''}>Payé par carte</option><option value="account"${S.settings.lastMethod==='account'?' selected':''}>Payé depuis le compte</option></select><button class="btn" type="submit">Ajouter</button></div></form>`;
 
-  h+=`<div class="card"><h2>À venir avant la paie</h2>${up.length?up.map(e=>`<div class="row"><div class="l">${esc(e.label)}<small>${fd(e.date)}</small></div><div class="r ${e.amount>0?'good':''}">${sgn(e.amount)}</div></div>`).join(''):'<div class="muted">Rien de prévu jusqu\'à la paie.</div>'}</div>`;
+  const horizon=addDays(T,30>days?30:days+5);
+  let run=bal;
+  const fut=acctEvents(addDays(T,1),horizon);
+  top+=`<div class="card"><h2>Ce qui part et l'état du compte</h2>
+    <div class="row"><div class="l">Aujourd'hui</div><div class="r ${bal<0?'bad':''}">${money(bal)}</div></div>`+
+    (fut.length?fut.map(e=>{run+=e.amount;return `<div class="row"><div class="l">${esc(e.label)}<small>${fd(e.date)}</small></div><div class="r"><span class="${e.amount>0?'good':''}">${sgn(e.amount)}</span><small style="display:block;font-weight:500" class="${run<0?'bad':'muted'}">solde ${money(run)}</small></div></div>`}).join(''):'<div class="muted">Rien de prévu.</div>')+`</div>`;
 
   h+=`<div class="card"><h2>Période en cours · ${fd(ps)} → ${fd(end)}</h2>
     <div class="row"><span>Revenus</span><span class="r good">+ ${money(cur.income)}</span></div>
@@ -268,7 +285,8 @@ function dashboard(){
     h+=`<div class="prog"><i style="width:${pct}%"></i></div>
       <div class="muted">${esc(S.settings.goalName||'Objectif')} : ${money(sav)} / ${money(g)} (${pct.toFixed(0)} %)${rest>0&&sm>0?` · atteint dans ~${Math.ceil(rest/sm)} mois`:''}</div>`;
   }
-  return h+'</div>';
+  h+='</div>';
+  return top+`<details class="more"><summary>Détails du mois (bilan, carte, prévision, budgets)</summary>${h}</details>`;
 }
 
 function opsView(){
@@ -326,8 +344,7 @@ function setView(){
       <button class="btn ghost" data-a="export">Exporter</button>
       <button class="btn ghost" data-a="import">Importer</button>
       <button class="btn ghost" data-a="demo">Exemple</button>
-      <button class="btn danger" data-a="reset">Tout effacer</button></div>
-      <input type="file" id="file" accept="application/json" hidden></div>`;
+      <button class="btn danger" data-a="reset">Tout effacer</button></div></div>`;
 }
 
 function render(){
@@ -385,7 +402,7 @@ const actions={
   'add-op':()=>openForm('op'), 'add-rec':()=>openForm('rec'),
   'edit-op':el=>openForm('op',S.ops.find(x=>x.id===el.dataset.id)),
   'edit-rec':el=>openForm('rec',S.recurring.find(x=>x.id===el.dataset.id)),
-  demo,
+  demo, 'go-set':()=>{tab='set';render()},
   export:()=>{const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([JSON.stringify(S,null,1)],{type:'application/json'}));a.download=`aurora-budget-${iso(today())}.json`;a.click()},
   import:()=>$('#file').click(),
   reset:()=>{if(confirm('Tout effacer définitivement ?')){S=defaults();save();render()}}
@@ -400,6 +417,13 @@ document.addEventListener('change',e=>{
   f.text().then(t=>{const j=JSON.parse(t); if(!j.settings) throw 0; const d=defaults(); S={...d,...j,settings:{...d.settings,...j.settings}}; save(); render()}).catch(()=>alert('Fichier invalide.'));
 });
 document.addEventListener('submit',e=>{
+  if(e.target.id==='quick'){
+    e.preventDefault();
+    const v=Object.fromEntries(new FormData(e.target)), amount=Math.abs(parseFloat(v.amount));
+    if(!(amount>0)) return;
+    S.ops.push({id:uid(),date:iso(today()),label:(v.label||'').trim()||'Dépense',amount,kind:'expense',method:v.method,cat:'Autre'});
+    S.settings.lastMethod=v.method; save(); render(); return;
+  }
   if(e.target.id!=='setForm') return;
   e.preventDefault();
   const v=Object.fromEntries(new FormData(e.target)), n=k=>parseFloat(v[k])||0, day=k=>Math.min(31,Math.max(1,parseInt(v[k])||1));
