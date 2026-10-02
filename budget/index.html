@@ -80,6 +80,7 @@ dialog::backdrop{background:rgba(0,0,0,.45)}
 <main><div id="view"></div></main>
 <nav class="tabs" id="tabs">
   <button data-tab="home"><span>🏠</span>Mon mois</button>
+  <button data-tab="future"><span>📈</span>Futur</button>
   <button data-tab="fixed"><span>🔁</span>Fixes</button>
   <button data-tab="set"><span>⚙️</span>Réglages</button>
 </nav>
@@ -107,7 +108,7 @@ const GROUPS=['Logement & prêts','Énergie, eau, télécom','Enfants','Impôts 
 
 /* ---------- données ---------- */
 const KEY='aurora-budget-v2';
-const defaults=()=>({settings:{cycleStart:20,savings:0},fixed:[],spends:[],actuals:{},banked:{}});
+const defaults=()=>({settings:{cycleStart:20,savings:0,balance:0,balDate:iso(today()),cardClose:20,cardDebit:31,dailySpend:0,lastMethod:'card'},fixed:[],spends:[],actuals:{},banked:{}});
 const normalize=j=>{const d=defaults();return {...d,...j,settings:{...d.settings,...j.settings},fixed:j.fixed||[],spends:j.spends||[],actuals:j.actuals||{},banked:j.banked||{}}};
 function load(){try{const j=JSON.parse(localStorage.getItem(KEY));if(j&&Array.isArray(j.fixed))return normalize(j)}catch(e){}return defaults()}
 let S=load();
@@ -141,8 +142,54 @@ function budget(c){
   return {income,surplus,out,groups,spent,rav,left:rav-spent};
 }
 
+
+/* ---------- état du compte : jour après jour ---------- */
+// Carte différée : achats jusqu'au jour cardClose (inclus) débités le dernier jour ouvré (ou le jour cardDebit) du mois.
+function stmtOf(d){
+  const cc=S.settings.cardClose, dd=S.settings.cardDebit; let y=d.getFullYear(), m=d.getMonth();
+  if(d.getDate()>Math.min(cc,dim(y,m))) m++;
+  const close=dayIn(y,m,cc);
+  let debit=dayIn(y,dd>cc?m:m+1,dd);
+  while(debit.getDay()===0||debit.getDay()===6) debit=addDays(debit,-1);
+  return {key:iso(close),close,debit};
+}
+function accountEvents(from,to,extraDaily){
+  if(from>to) return [];
+  const ev=[];
+  for(let c=cycleOf(from); c.start<=to; c=shiftCycle(c,1)){
+    for(const f of S.fixed){
+      const o=occurrence(f,c); if(o<from||o>to) continue;
+      let a=amountOf(f,c); if(f.kind==='income'&&f.est) a=Math.min(a,f.amount);   // le surplus est mis de côté
+      ev.push({date:o,label:f.label,amount:f.kind==='income'?a:-a,type:'fixed'});
+    }
+  }
+  const T=today(), card=[];
+  for(const x of S.spends){
+    const d=parse(x.date);
+    if(x.method==='account'){ if(d>=from&&d<=to) ev.push({date:d,label:x.label,amount:-x.amount,type:'spend'}) }
+    else card.push({date:d,amount:x.amount});
+  }
+  if(extraDaily>0) for(let d=addDays(T,1); d<=to; d=addDays(d,1)) card.push({date:d,amount:extraDaily});
+  const stm={};
+  for(const x of card){const s2=stmtOf(x.date),e=stm[s2.key]||(stm[s2.key]={...s2,total:0});e.total+=x.amount}
+  for(const e of Object.values(stm)) if(e.debit>=from&&e.debit<=to) ev.push({date:e.debit,label:'Débit carte · achats jusqu\'au '+fd(e.close),amount:-e.total,type:'card'});
+  return ev.sort((a,b)=>a.date-b.date);
+}
+function projection(days){
+  const T=today(), ref=parse(S.settings.balDate), end=addDays(T,days);
+  const evs=accountEvents(addDays(ref,1),end,S.settings.dailySpend);
+  const by={}; for(const e of evs)(by[iso(e.date)]||(by[iso(e.date)]=[])).push(e);
+  const sum=l=>l.reduce((a,e)=>a+e.amount,0);
+  let bal=S.settings.balance;
+  for(let d=addDays(ref,1); d<T; d=addDays(d,1)) bal+=sum(by[iso(d)]||[]);
+  const rows=[];
+  for(let d=T; d<=end; d=addDays(d,1)){const es=by[iso(d)]||[]; bal+=sum(es); rows.push({date:d,events:es,bal})}
+  return rows;
+}
+const balanceToday=()=>projection(0)[0].bal;
+
 /* ---------- rendu ---------- */
-let tab='home', off=0;
+let tab='home', off=0, horizon=60;
 const view=$('#view');
 
 function waterfall(b){
@@ -185,11 +232,46 @@ function home(){
 
   h+=`<form class="card" id="quick"><h2>Noter une dépense</h2>
     <div class="two"><input name="amount" type="number" step="0.01" min="0.01" placeholder="Montant €" required><input name="label" placeholder="Quoi ? (courses…)"></div>
-    <div class="actions"><button class="btn" type="submit" style="width:100%">Ajouter</button></div></form>`;
+    <div class="two" style="margin-top:8px"><select name="method"><option value="card"${S.settings.lastMethod!=='account'?' selected':''}>Carte différée</option><option value="account"${S.settings.lastMethod==='account'?' selected':''}>Compte (PayPal, retrait…)</option></select><button class="btn" type="submit">Ajouter</button></div></form>`;
 
   const list=S.spends.filter(x=>{const d=parse(x.date);return d>=c.start&&d<=c.end}).sort((a,z)=>z.date.localeCompare(a.date));
-  h+=`<div class="card"><h2>Dépenses du mois (${list.length})</h2>${list.length?list.map(x=>`<div class="row item" data-a="edit-spend" data-id="${x.id}"><div class="l">${esc(x.label)}<small>${fd(parse(x.date))}</small></div><div class="r">− ${money(x.amount)}</div></div>`).join(''):'<div class="muted">Aucune dépense notée sur ce mois.</div>'}</div>`;
+  h+=`<div class="card"><h2>Dépenses du mois (${list.length})</h2>${list.length?list.map(x=>`<div class="row item" data-a="edit-spend" data-id="${x.id}"><div class="l">${esc(x.label)}<small>${fd(parse(x.date))} · ${x.method==='account'?'compte':'💳 carte'}</small></div><div class="r">− ${money(x.amount)}</div></div>`).join(''):'<div class="muted">Aucune dépense notée sur ce mois.</div>'}</div>`;
   if(S.settings.savings>0) h+=`<div class="card"><div class="row"><span>Épargne (Livret A…)</span><span class="r">${money(S.settings.savings)}</span></div></div>`;
+  return h;
+}
+
+
+function chartSvg(rows){
+  const W=360,H=160,pl=8,pr=8,pt=12,pb=20;
+  const vals=rows.map(r=>r.bal); let mn=Math.min(0,...vals), mx=Math.max(0,...vals); if(mx===mn) mx=mn+1;
+  const x=i=>pl+(W-pl-pr)*(rows.length>1?i/(rows.length-1):0), y=v=>pt+(H-pt-pb)*(1-(v-mn)/(mx-mn));
+  let d=`M${x(0)},${y(rows[0].bal)}`; rows.forEach((r,i)=>{if(i) d+=` L${x(i)},${y(rows[i-1].bal)} L${x(i)},${y(r.bal)}`});
+  const y0=y(0), low=rows.reduce((a,r)=>r.bal<a.bal?r:a,rows[0]), li=rows.indexOf(low);
+  return `<svg viewBox="0 0 ${W} ${H}" width="100%" role="img" aria-label="Solde du compte jour après jour">
+    <defs><clipPath id="up"><rect x="0" y="0" width="${W}" height="${y0}"/></clipPath><clipPath id="dn"><rect x="0" y="${y0}" width="${W}" height="${H}"/></clipPath></defs>
+    <line x1="${pl}" x2="${W-pr}" y1="${y0}" y2="${y0}" style="stroke:var(--muted)" stroke-dasharray="3 3" stroke-width="1"/>
+    <text x="${pl}" y="${y0-3}" font-size="9" style="fill:var(--muted)">0 €</text>
+    <path d="${d}" fill="none" stroke-width="2" style="stroke:var(--good)" clip-path="url(#up)"/>
+    <path d="${d}" fill="none" stroke-width="2" style="stroke:var(--bad)" clip-path="url(#dn)"/>
+    <circle cx="${x(li)}" cy="${y(low.bal)}" r="4" style="fill:${low.bal<0?'var(--bad)':'var(--good)'}"/>
+    <text x="${pl}" y="${H-5}" font-size="9" style="fill:var(--muted)">${fd(rows[0].date)}</text>
+    <text x="${W-pr}" y="${H-5}" font-size="9" text-anchor="end" style="fill:var(--muted)">${fd(rows[rows.length-1].date)}</text></svg>`;
+}
+
+function futureView(){
+  const rows=projection(horizon), now=rows[0], low=rows.reduce((a,r)=>r.bal<a.bal?r:a,rows[0]), last=rows[rows.length-1];
+  const c=v=>v<0?'bad':'';
+  let h='';
+  if(!S.settings.balDate||(S.settings.balance===0&&!S.fixed.length)) h+=`<div class="card hint">Renseigne ton <b>solde actuel</b> dans Réglages pour que la courbe soit juste.</div>`;
+  h+=`<div class="card hero"><h2>Mon compte dans ${horizon} jours</h2><div class="big ${c(last.bal)||'good'}">${money(last.bal)}</div>
+    <div class="sub">Point le plus bas : <b class="${c(low.bal)}">${money(low.bal)}</b> le ${fd(low.date)}</div>
+    <div class="grid3"><div><b class="${c(now.bal)}">${money(now.bal)}</b><span>Aujourd'hui</span></div><div><b class="${c(low.bal)}">${money(low.bal)}</b><span>Point bas</span></div><div><b class="${c(last.bal)}">${money(last.bal)}</b><span>Fin de période</span></div></div></div>`;
+  h+=`<div class="card"><h2>Évolution jour après jour</h2>${chartSvg(rows)}
+    <div class="two" style="margin-top:12px"><div><label>Période</label><select data-fut="horizon">${[30,60,90].map(n=>`<option value="${n}"${n===horizon?' selected':''}>${n} jours</option>`).join('')}</select></div>
+    <div><label>Dépenses prévues par jour (€)</label><input type="number" min="0" step="1" value="${S.settings.dailySpend||0}" data-fut="daily"></div></div>
+    <p class="muted" style="font-size:.82rem;margin:8px 0 0">Les dépenses prévues s'ajoutent à ce que tu as noté, comme des achats par carte débités en fin de mois. À 0 €, seuls les prélèvements connus et tes dépenses notées comptent.</p></div>`;
+  const days=rows.filter((r,i)=>i===0||r.events.length);
+  h+=`<div class="card"><h2>Jour par jour</h2>${days.map(r=>`<div class="row"><div class="l"><b>${r.date.toLocaleDateString('fr-FR',{weekday:'short',day:'numeric',month:'short'})}</b>${r.events.length?r.events.map(e=>`<small>${esc(e.label)} · <span class="${e.amount>0?'good':''}">${e.amount>0?'+':'−'} ${money(Math.abs(e.amount))}</span></small>`).join(''):'<small>Aujourd\'hui</small>'}</div><div class="r ${c(r.bal)}">${money(r.bal)}</div></div>`).join('')}</div>`;
   return h;
 }
 
@@ -204,7 +286,11 @@ function setView(){
   const st=S.settings;
   return `<form class="card" id="setForm"><h2>Réglages</h2>
     <label>Le mois commence le (jour)</label><input name="cycleStart" type="number" min="1" max="31" value="${st.cycleStart}" required>
+    <label>Solde actuel du compte courant (€)</label><input name="balance" type="number" step="0.01" value="${balanceToday().toFixed(2)}" required>
     <label>Épargne actuelle (€)</label><input name="savings" type="number" step="0.01" value="${st.savings}">
+    <h2 style="margin-top:20px">Carte différée</h2>
+    <div class="two"><div><label>Clôture : dernier jour du relevé</label><input name="cardClose" type="number" min="1" max="31" value="${st.cardClose}" required></div>
+    <div><label>Débit (31 = dernier jour ouvré)</label><input name="cardDebit" type="number" min="1" max="31" value="${st.cardDebit}" required></div></div>
     <div class="actions"><button class="btn" type="submit">Enregistrer</button></div></form>
     <div class="card"><h2>Rappels de prélèvement</h2>
       <p class="muted" style="margin-top:0">Une notification par jour de prélèvement estimé, dans ton calendrier téléphone, pour saisir le montant réel.</p>
@@ -216,7 +302,7 @@ function setView(){
 
 function render(){
   document.querySelectorAll('#tabs button').forEach(b=>b.setAttribute('aria-selected',b.dataset.tab===tab));
-  view.innerHTML={home,fixed:fixedView,set:setView}[tab]();
+  view.innerHTML={home,future:futureView,fixed:fixedView,set:setView}[tab]();
 }
 
 /* ---------- formulaires ---------- */
@@ -249,10 +335,11 @@ function openSpend(item){
     <label>Libellé</label><input name="label" value="${esc(item.label)}" required>
     <div class="two"><div><label>Montant (€)</label><input name="amount" type="number" step="0.01" min="0.01" value="${item.amount}" required></div>
     <div><label>Date</label><input name="date" type="date" value="${item.date}" required></div></div>
+    <label>Payé avec</label><select name="method"><option value="card"${item.method!=='account'?' selected':''}>Carte différée</option><option value="account"${item.method==='account'?' selected':''}>Compte</option></select>
     <div class="actions"><button class="btn danger" type="button" id="del">Supprimer</button><button class="btn ghost" type="button" id="cancel">Annuler</button><button class="btn" type="submit">Enregistrer</button></div></form>`;
   $('#cancel').onclick=()=>dlg.close();
   $('#del').onclick=()=>{removeFrom(S.spends,item.id);save();dlg.close();render()};
-  $('#f').onsubmit=e=>{e.preventDefault();const f=e.target;Object.assign(item,{label:f.label.value.trim()||'Dépense',amount:Math.abs(parseFloat(f.amount.value)),date:f.date.value});save();dlg.close();render()};
+  $('#f').onsubmit=e=>{e.preventDefault();const f=e.target;Object.assign(item,{label:f.label.value.trim()||'Dépense',amount:Math.abs(parseFloat(f.amount.value)),date:f.date.value,method:f.method.value});save();dlg.close();render()};
   dlg.showModal();
 }
 
@@ -292,6 +379,9 @@ document.addEventListener('click',e=>{
   const a=e.target.closest('[data-a]'); if(a&&actions[a.dataset.a]) actions[a.dataset.a](a);
 });
 document.addEventListener('change',e=>{
+  const fut=e.target.dataset&&e.target.dataset.fut;
+  if(fut==='horizon'){horizon=parseInt(e.target.value)||60;render();return}
+  if(fut==='daily'){S.settings.dailySpend=Math.max(0,parseFloat(e.target.value)||0);save();render();return}
   if(e.target.id!=='file') return;
   const f=e.target.files[0]; if(!f) return;
   f.text().then(t=>{const j=JSON.parse(t); if(!Array.isArray(j.fixed)) throw 0; S=normalize(j); save(); tab='home'; off=0; render()}).catch(()=>alert('Fichier invalide (il faut une sauvegarde de cette version de l\'appli).'));
@@ -301,11 +391,13 @@ document.addEventListener('submit',e=>{
   if(e.target.id==='quick'){
     e.preventDefault();
     const f=e.target, amount=Math.abs(parseFloat(f.amount.value)); if(!(amount>0)) return;
-    S.spends.push({id:uid(),date:iso(today()),label:f.label.value.trim()||'Dépense',amount}); save(); render(); return;
+    S.spends.push({id:uid(),date:iso(today()),label:f.label.value.trim()||'Dépense',amount,method:f.method.value}); S.settings.lastMethod=f.method.value; save(); render(); return;
   }
   if(e.target.id==='setForm'){
     e.preventDefault();
     const f=e.target; S.settings.cycleStart=Math.min(31,Math.max(1,parseInt(f.cycleStart.value)||20)); S.settings.savings=parseFloat(f.savings.value)||0;
+    S.settings.balance=parseFloat(f.balance.value)||0; S.settings.balDate=iso(today());
+    S.settings.cardClose=Math.min(31,Math.max(1,parseInt(f.cardClose.value)||20)); S.settings.cardDebit=Math.min(31,Math.max(1,parseInt(f.cardDebit.value)||31));
     save(); tab='home'; off=0; render();
   }
 });
